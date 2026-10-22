@@ -611,6 +611,34 @@ fn flattening_keeps_a_valued_widget_it_cannot_draw() {
     assert_eq!(value(6), Some(Object::name("Yes")));
 }
 
+/// #4017: a widget with no appearance whose field has no value (none, or an empty string) has
+/// nothing to lose, so flattening removes it instead of leaving a fillable field behind. One whose
+/// value it inherits from its parent field still stays (#1794).
+#[test]
+fn flattening_removes_an_empty_widget_it_cannot_draw() {
+    let page = stream("", " ");
+    let mut doc = build(&[
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 6 0 R 7 0 R 8 0 R] >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> /Contents 4 0 R /Annots [5 0 R 6 0 R 7 0 R 9 0 R] >>",
+        &page,
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (no_value) /Rect [10 10 150 40] /F 4 >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (empty) /V () /Rect [10 50 150 80] /F 4 >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (drawn) /Rect [10 90 150 120] /F 4 /AP << /N 10 0 R >> >>",
+        "<< /FT /Tx /T (parent) /V (Ada) /Kids [9 0 R] >>",
+        "<< /Type /Annot /Subtype /Widget /Parent 8 0 R /Rect [10 130 150 160] /F 4 >>",
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 140 30] /Length 0 >>\nstream\n\nendstream",
+    ]);
+    assert_eq!(flatten(&mut doc, &[0], false, true).unwrap(), 1, "only the field with an appearance is drawn");
+    let doc = reopen(&doc);
+    let refs = |o: &Object| -> Vec<u32> { doc.resolve(o).as_array().unwrap().iter().filter_map(|f| f.as_ref()).map(|r| r.num).collect() };
+    let p = &pdfcraft_model::pages(&doc)[0];
+    assert_eq!(refs(p.dict.get(b"Annots").unwrap()), [9], "only the widget with an inherited value stays on the page");
+    let root = doc.root().unwrap();
+    let af = doc.resolve(doc.get(root).as_dict().unwrap().get(b"AcroForm").unwrap());
+    assert_eq!(refs(af.as_dict().unwrap().get(b"Fields").unwrap()), [8], "and its field in the form");
+}
+
 /// #1794: a reply this builder cannot draw stays on the page even when the comment it replies to
 /// is flattened; the comment's pop-up still goes with it.
 #[test]
