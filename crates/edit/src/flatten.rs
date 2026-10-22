@@ -38,7 +38,8 @@ fn appearance(doc: &Document, d: &Dict) -> Option<ObjRef> {
 }
 
 /// Whether a widget's field has a value: its `/V`, or the nearest one inherited through `/Parent`
-/// (ISO 32000-2 §12.7.4.1). An empty string or array is no value.
+/// (ISO 32000-2 §12.7.4.1). An empty string or array is no value. Past the depth limit the answer
+/// is yes: a value that wasn't checked must not be removed.
 fn has_value(doc: &Document, widget: &Dict) -> bool {
     let mut d = widget.clone();
     let mut seen = HashSet::new();
@@ -55,7 +56,7 @@ fn has_value(doc: &Document, widget: &Dict) -> bool {
         let Some(next) = doc.get(parent).as_dict().cloned() else { return false };
         d = next;
     }
-    false
+    true
 }
 
 /// Algorithm 8.1: the matrix that maps the form's bounding box onto the annotation rectangle.

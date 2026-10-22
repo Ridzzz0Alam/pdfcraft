@@ -639,6 +639,27 @@ fn flattening_removes_an_empty_widget_it_cannot_draw() {
     assert_eq!(refs(af.as_dict().unwrap().get(b"Fields").unwrap()), [8], "and its field in the form");
 }
 
+/// #4017: when the walk up the parent fields reaches its limit before finding a value, the widget
+/// stays: an unverified value must not be removed. Here `/V` sits on the 64th ancestor.
+#[test]
+fn flattening_keeps_a_widget_whose_value_is_past_the_parent_limit() {
+    let page = stream("", " ");
+    let mut objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [69 0 R] >> >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> /Contents 4 0 R /Annots [5 0 R] >>".into(),
+        page,
+        "<< /Type /Annot /Subtype /Widget /Parent 6 0 R /Rect [10 10 150 40] /F 4 >>".into(),
+    ];
+    objs.extend((6..69).map(|n| format!("<< /Parent {} 0 R /Kids [{} 0 R] >>", n + 1, n - 1)));
+    objs.push("<< /FT /Tx /T (deep) /V (Ada) /Kids [68 0 R] >>".into());
+    let mut doc = build(&objs.iter().map(String::as_str).collect::<Vec<_>>());
+    flatten(&mut doc, &[0], false, true).unwrap();
+    let doc = reopen(&doc);
+    let annots = pdfcraft_model::pages(&doc)[0].dict.get(b"Annots").map(|a| doc.resolve(a).as_array().map_or(0, Vec::len));
+    assert_eq!(annots, Some(1), "the widget stays");
+}
+
 /// #1794: a reply this builder cannot draw stays on the page even when the comment it replies to
 /// is flattened; the comment's pop-up still goes with it.
 #[test]
